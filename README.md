@@ -57,7 +57,7 @@ sudo apt-get install libboost-all-dev
 you need to add following environment variable for numba.cuda, you can add them to ~/.bashrc:
 
 ```bash
-export NUMBAPRO_CUDA_DRIVER=/usr/lib/x86_64-linux-gnu/libcuda.so
+~~export NUMBAPRO_CUDA_DRIVER=/usr/lib/x86_64-linux-gnu/libcuda.so~~
 export NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
 export NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice
 ```
@@ -85,19 +85,20 @@ Download KITTI dataset and create some directories first:
            └── velodyne_reduced <-- empty directory
 ```
 
-* Create kitti infos:
+* Create kitti infos: (kitti_infos_train.pkl, kitti_infos_val.pkl)
+contains calib, label, velodyne info
 
 ```bash
 python create_data.py create_kitti_info_file --data_path=KITTI_DATASET_ROOT
 ```
 
-* Create reduced point cloud:
+* Create reduced point cloud: (*/velodyne_reduced/*.bin)
 
 ```bash
 python create_data.py create_reduced_point_cloud --data_path=KITTI_DATASET_ROOT
 ```
 
-* Create groundtruth-database infos:
+* Create groundtruth-database infos: (kitti_dbinfos_train.pkl)
 
 ```bash
 python create_data.py create_groundtruth_database --data_path=KITTI_DATASET_ROOT

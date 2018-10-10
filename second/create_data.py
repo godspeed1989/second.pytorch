@@ -73,6 +73,7 @@ def create_kitti_info_file(data_path,
         save_path = pathlib.Path(data_path)
     else:
         save_path = pathlib.Path(save_path)
+    # train
     kitti_infos_train = kitti.get_kitti_image_info(
         data_path,
         training=True,
@@ -85,6 +86,7 @@ def create_kitti_info_file(data_path,
     print(f"Kitti info train file is saved to {filename}")
     with open(filename, 'wb') as f:
         pickle.dump(kitti_infos_train, f)
+    # val
     kitti_infos_val = kitti.get_kitti_image_info(
         data_path,
         training=True,
@@ -97,6 +99,7 @@ def create_kitti_info_file(data_path,
     print(f"Kitti info val file is saved to {filename}")
     with open(filename, 'wb') as f:
         pickle.dump(kitti_infos_val, f)
+    # train + val
     """
     if create_trainval:
         kitti_infos_trainval = kitti.get_kitti_image_info(
@@ -182,6 +185,7 @@ def create_reduced_point_cloud(data_path,
     _create_reduced_point_cloud(data_path, train_info_path, save_path)
     _create_reduced_point_cloud(data_path, val_info_path, save_path)
     _create_reduced_point_cloud(data_path, test_info_path, save_path)
+    # reverse coordinate
     if with_back:
         _create_reduced_point_cloud(
             data_path, train_info_path, save_path, back=True)
