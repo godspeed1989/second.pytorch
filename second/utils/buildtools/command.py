@@ -8,7 +8,6 @@ from functools import partial
 from pathlib import Path
 
 import fire
-import tensorflow as tf
 
 from second.utils.find import find_cuda, find_cuda_device_arch
 
@@ -17,7 +16,7 @@ class Gpp:
     def __init__(self,
                  sources,
                  target,
-                 std="c++17",
+                 std="c++11",
                  includes: list = None,
                  defines: dict = None,
                  cflags: str = None,
@@ -111,7 +110,7 @@ class Nvcc(Gpp):
                  sources,
                  target,
                  arch=None,
-                 std="c++14",
+                 std="c++11",
                  includes: list = None,
                  defines: dict = None,
                  cflags: str = None,
@@ -149,7 +148,7 @@ class CUDALink(Gpp):
     def __init__(self,
                  sources,
                  target,
-                 std="c++17",
+                 std="c++11",
                  includes: list = None,
                  defines: dict = None,
                  cflags: str = None,

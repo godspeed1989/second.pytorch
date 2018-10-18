@@ -190,7 +190,7 @@ output.features = SubmanifoldConvolutionFunction.apply(
     self.weight.view(self.filter_volume, self.nIn, self.nOut),
 ```
 
-You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is related to car.config and the people model is related to people.config.
+You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is corresponding to car.config, the car_tiny model is corresponding to car.tiny.config and the people model is corresponding to people.config.
 
 ## Try Kitti Viewer (Unstable)
 
@@ -199,6 +199,11 @@ You should use kitti viewer based on pyqt and pyqtgraph to check data before tra
 run ```python ./kittiviewer/viewer.py```, check following picture to use kitti viewer:
 ![GuidePic](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/simpleguide.png)
 
+## TODO
+
+- [ ] add unit tests (2018.10~2018.11).
+- [ ] add a self-hosted CI (2018.10~2018.12).
+- [ ] replace pyqtgraph with modernGL or other draw tools (2018.11~2019.1).
 
 ## Concepts
 
