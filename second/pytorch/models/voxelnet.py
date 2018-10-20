@@ -18,7 +18,7 @@ from second.pytorch.core.losses import (WeightedSigmoidClassificationLoss,
                                           WeightedSmoothL1LocalizationLoss,
                                           WeightedSoftmaxClassificationLoss)
 
-from second.pytorch.models.pointnet import PointNetfeat
+from second.pytorch.models.pointnet import PointnetFeatureExtractor
 
 def _get_pos_neg_loss(cls_loss, labels):
     # cls_loss: [N, num_anchors, num_class]
@@ -590,6 +590,7 @@ class VoxelNet(nn.Module):
         vfe_class_dict = {
             "VoxelFeatureExtractor": VoxelFeatureExtractor,
             "VoxelFeatureExtractorV2": VoxelFeatureExtractorV2,
+            "PointnetFeatureExtractor": PointnetFeatureExtractor,
         }
         vfe_class = vfe_class_dict[vfe_class_name]
         self.voxel_feature_extractor = vfe_class(

@@ -27,46 +27,64 @@ def get_paddings_indicator(actual_num, max_num, axis=0):
     # paddings_indicator shape: [batch_size, max_num]
     return paddings_indicator
 
-class PointNetfeat(nn.Module):
+class PointnetFeatureExtractor(nn.Module):
     def __init__(self,
                  num_input_features=4,
-                 use_norm=True,
-                 num_filters=[32, 128],
-                 with_distance=False,
-                 name='VoxelFeatureExtractor'):
-        super(PointNetfeat, self).__init__()
+                 use_norm=None,
+                 num_filters=None,
+                 with_distance=None,
+                 name='PointnetFeatureExtractor'):
+        super(PointnetFeatureExtractor, self).__init__()
         self.name = name
         self.num_input_features = num_input_features
 
         self.conv1 = torch.nn.Conv1d(3, 64, 1)
         self.conv2 = torch.nn.Conv1d(64, 128, 1)
-        self.conv3 = torch.nn.Conv1d(128, 1024, 1)
+        self.conv3 = torch.nn.Conv1d(128+3, 256, 1)
+        self.conv4 = torch.nn.Conv1d(256, 512, 1)
         self.bn1 = torch.nn.BatchNorm1d(64)
         self.bn2 = torch.nn.BatchNorm1d(128)
-        self.bn3 = torch.nn.BatchNorm1d(1024)
+        self.bn3 = torch.nn.BatchNorm1d(256)
+        self.bn4 = torch.nn.BatchNorm1d(512)
 
-    def forward(self, x, num_voxels):
-        # x: [concated_num_points, num_voxel_size, 3(4)]
+    def forward(self, features, num_voxels):
+        # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
-        voxel_count = x.shape[1]
-        intensity = x[..., 3]
-        xyz = x[..., :3]
+        points_mean = features[:, :, :3].sum(
+            dim=1, keepdim=True) / num_voxels.type_as(features).view(-1, 1, 1)
+        features_relative = features[:, :, :3] - points_mean
 
-        features = self.bn1(F.relu(self.conv1(xyz)))
-        features = self.bn2(F.relu(self.conv2(features)))
-        features = self.bn3(F.relu(self.conv3(features)))
-        features = x
-
+        # (K, N, 1)
+        voxel_count = features.shape[1]
         mask = get_paddings_indicator(num_voxels, voxel_count, axis=0)
+        mask = mask.unsqueeze(-1).type_as(features)
 
-        voxelwise = torch.max(features, dim=1)[0]
+        x = features_relative.permute(0, 2, 1).contiguous()
+        x = self.bn1(F.relu(self.conv1(x)))
+        x = self.bn2(F.relu(self.conv2(x)))
+        x = x.permute(0, 2, 1).contiguous()
+
+        x = torch.cat([x, features_relative], dim=-1)
+        x *= mask
+
+        x = x.permute(0, 2, 1).contiguous()
+        x = self.bn3(F.relu(self.conv3(x)))
+        x = self.bn4(F.relu(self.conv4(x)))
+        x = x.permute(0, 2, 1).contiguous()
+
+        voxelwise = x.max(dim=1, keepdim=False)[0]
+        if self.num_input_features == 4:
+            intensity = features[..., 3]
+            max_intensity = intensity.max(dim=1, keepdim=True)[0]
+            voxelwise = torch.cat([voxelwise, max_intensity], dim=-1)
         return voxelwise
 
 
 if __name__ == '__main__':
     num_voxel_size = 100
-    concated_num_points = 250
-    sim_data = Variable(torch.rand(concated_num_points, num_voxel_size, 4))
-    pointfeat = PointNetfeat()
-    out = pointfeat(sim_data, concated_num_points)
+    concated_num_points = 8
+    sim_features = Variable(torch.rand(concated_num_points, num_voxel_size, 4))
+    sim_num_voxels = Variable(torch.rand(concated_num_points))
+    pointfeat = PointnetFeatureExtractor()
+    out = pointfeat(sim_features, sim_num_voxels)
     print('global feat', out.size())
