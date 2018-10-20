@@ -38,14 +38,14 @@ class PointnetFeatureExtractor(nn.Module):
         self.name = name
         self.num_input_features = num_input_features
 
-        self.conv1 = torch.nn.Conv1d(3, 64, 1)
-        self.conv2 = torch.nn.Conv1d(64, 128, 1)
-        self.conv3 = torch.nn.Conv1d(128+3, 256, 1)
-        self.conv4 = torch.nn.Conv1d(256, 512, 1)
-        self.bn1 = torch.nn.BatchNorm1d(64)
-        self.bn2 = torch.nn.BatchNorm1d(128)
-        self.bn3 = torch.nn.BatchNorm1d(256)
-        self.bn4 = torch.nn.BatchNorm1d(512)
+        self.conv1 = torch.nn.Conv1d(3, 32, 1)
+        self.conv2 = torch.nn.Conv1d(32, 64, 1)
+        self.conv3 = torch.nn.Conv1d(64+3, 96, 1)
+        self.conv4 = torch.nn.Conv1d(96, 127, 1)
+        self.bn1 = torch.nn.BatchNorm1d(32)
+        self.bn2 = torch.nn.BatchNorm1d(64)
+        self.bn3 = torch.nn.BatchNorm1d(96)
+        self.bn4 = torch.nn.BatchNorm1d(127)
 
     def forward(self, features, num_voxels):
         # features: [concated_num_points, num_voxel_size, 3(4)]
@@ -59,18 +59,18 @@ class PointnetFeatureExtractor(nn.Module):
         mask = get_paddings_indicator(num_voxels, voxel_count, axis=0)
         mask = mask.unsqueeze(-1).type_as(features)
 
-        x = features_relative.permute(0, 2, 1).contiguous()
+        x = features_relative.permute(0, 2, 1)
         x = self.bn1(F.relu(self.conv1(x)))
         x = self.bn2(F.relu(self.conv2(x)))
-        x = x.permute(0, 2, 1).contiguous()
+        x = x.permute(0, 2, 1)
 
         x = torch.cat([x, features_relative], dim=-1)
         x *= mask
 
-        x = x.permute(0, 2, 1).contiguous()
+        x = x.permute(0, 2, 1)
         x = self.bn3(F.relu(self.conv3(x)))
         x = self.bn4(F.relu(self.conv4(x)))
-        x = x.permute(0, 2, 1).contiguous()
+        x = x.permute(0, 2, 1)
 
         voxelwise = x.max(dim=1, keepdim=False)[0]
         if self.num_input_features == 4:
