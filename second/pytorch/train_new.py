@@ -18,7 +18,7 @@ from second.data.preprocess import merge_second_batch
 from second.protos import pipeline_pb2
 from second.pytorch.builder import (box_coder_builder, input_reader_builder,
                                       lr_scheduler_builder, optimizer_builder,
-                                      second_builder)
+                                      second_builder_new)
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.utils.progress_bar import ProgressBar
 
