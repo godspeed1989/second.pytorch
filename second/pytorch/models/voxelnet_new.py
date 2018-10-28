@@ -18,6 +18,7 @@ from second.pytorch.core.losses import (WeightedSigmoidClassificationLoss,
                                           WeightedSmoothL1LocalizationLoss,
                                           WeightedSoftmaxClassificationLoss)
 
+from second.pytorch.models.pointnet import PointnetFeatureExtractor
 
 def _get_pos_neg_loss(cls_loss, labels):
     # cls_loss: [N, num_anchors, num_class]
@@ -230,7 +231,7 @@ class SparseMiddleExtractor(nn.Module):
             Linear = change_default_args(bias=True)(nn.Linear)
         sparse_shape = np.array(output_shape[1:4]) + [1, 0, 0]
         # sparse_shape[0] = 11
-        print(sparse_shape)
+        print('sparse_shape', sparse_shape) # [11, H, W]
         self.scn_input = scn.InputLayer(3, sparse_shape.tolist())
         self.voxel_output_shape = output_shape
         middle_layers = []
@@ -326,7 +327,7 @@ class MiddleExtractor(nn.Module):
 
     def forward(self, voxel_features, coors, batch_size):
         output_shape = [batch_size] + self.voxel_output_shape[1:]
-        ret = scatter_nd(coors.long(), voxel_features, output_shape)
+        ret = scatter_nd(coors, voxel_features, output_shape)
         # print('scatter_nd fw:', time.time() - t)
         ret = ret.permute(0, 4, 1, 2, 3)
         ret = self.middle_conv(ret)
@@ -589,6 +590,7 @@ class VoxelNet(nn.Module):
         vfe_class_dict = {
             "VoxelFeatureExtractor": VoxelFeatureExtractor,
             "VoxelFeatureExtractorV2": VoxelFeatureExtractorV2,
+            "PointnetFeatureExtractor": PointnetFeatureExtractor,
         }
         vfe_class = vfe_class_dict[vfe_class_name]
         self.voxel_feature_extractor = vfe_class(
@@ -665,13 +667,15 @@ class VoxelNet(nn.Module):
         batch_anchors = example["anchors"]
         batch_size_dev = batch_anchors.shape[0]
         t = time.time()
-        # features: [num_voxels, max_num_points_per_voxel, 7]
+        # voxels: [num_voxels, max_num_points_per_voxel, 4]
         # num_points: [num_voxels]
         # coors: [num_voxels, 4]
         voxel_features = self.voxel_feature_extractor(voxels, num_points)
+        # voxel_features: [num_voxels, C]
         if self._use_sparse_rpn:
             preds_dict = self.sparse_rpn(voxel_features, coors, batch_size_dev)
         else:
+            # spatial_features [Batch, C, H, W]
             spatial_features = self.middle_feature_extractor(
                 voxel_features, coors, batch_size_dev)
             if self._use_bev:
@@ -680,7 +684,9 @@ class VoxelNet(nn.Module):
                 preds_dict = self.rpn(spatial_features)
         # preds_dict["voxel_features"] = voxel_features
         # preds_dict["spatial_features"] = spatial_features
+        # box_preds [Batch, H/2, W/2, 14]
         box_preds = preds_dict["box_preds"]
+        # cls_preds [Batch, H/2, W/2, 2]
         cls_preds = preds_dict["cls_preds"]
         self._total_forward_time += time.time() - t
         if self.training:
