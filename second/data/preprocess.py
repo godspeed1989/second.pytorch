@@ -279,7 +279,7 @@ def prep_pointcloud(input_dict,
         bev_vxsize[:2] /= 2
         bev_vxsize[2] *= 2
         bev_map = points_to_bev(points, bev_vxsize, pc_range,
-                                without_reflectivity)
+                                not without_reflectivity)
         example["bev_map"] = bev_map
     if not training:
         return example

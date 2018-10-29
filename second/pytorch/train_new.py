@@ -1,4 +1,5 @@
 import os
+import sys
 import pathlib
 import pickle
 import shutil
@@ -19,8 +20,9 @@ from second.protos import pipeline_pb2
 from second.pytorch.builder import (box_coder_builder, input_reader_builder,
                                       lr_scheduler_builder, optimizer_builder,
                                       second_builder_new)
-from second.utils.eval import get_coco_eval_result, get_official_eval_result
+from second.utils.eval import get_coco_eval_result, get_official_eval_result, colorize
 from second.utils.progress_bar import ProgressBar
+from second.train_hook import check_if_should_pause
 
 
 def _get_pos_neg_loss(cls_loss, labels):
@@ -128,7 +130,7 @@ def train(config_path,
     # BUILD NET
     ######################
     center_limit_range = model_cfg.post_center_limit_range
-    net = second_builder.build(model_cfg, voxel_generator, target_assigner)
+    net = second_builder_new.build(model_cfg, voxel_generator, target_assigner)
     net.cuda()
     # net_train = torch.nn.DataParallel(net).cuda()
     print("num_trainable parameters:", len(list(net.parameters())))
@@ -223,12 +225,17 @@ def train(config_path,
         total_loop -= 1
     mixed_optimizer.zero_grad()
     try:
-        for _ in range(total_loop):
+        for loop in range(total_loop):
             if total_step_elapsed + train_cfg.steps_per_eval > train_cfg.steps:
                 steps = train_cfg.steps % train_cfg.steps_per_eval
             else:
                 steps = train_cfg.steps_per_eval
             for step in range(steps):
+                if check_if_should_pause():
+                    torchplus.train.save_models(model_dir, [net, optimizer],
+                                                net.get_global_step())
+                    print('pause and save model @ {}/{} steps:{}'.format(loop, total_loop, net.get_global_step()))
+                    sys.exit(0)
                 lr_scheduler.step()
                 try:
                     example = next(data_iter)
@@ -327,11 +334,14 @@ def train(config_path,
                     log_str = ', '.join(metrics_str_list)
                     print(log_str, file=logf)
                     print(log_str)
+                    bev_map = example['bev_map'][0][-1:]
+                    writer.add_image('BEV', colorize(bev_map), global_step)
                 ckpt_elasped_time = time.time() - ckpt_start_time
                 if ckpt_elasped_time > train_cfg.save_checkpoints_secs:
                     torchplus.train.save_models(model_dir, [net, optimizer],
                                                 net.get_global_step())
                     ckpt_start_time = time.time()
+            # After one epoch
             total_step_elapsed += steps
             torchplus.train.save_models(model_dir, [net, optimizer],
                                         net.get_global_step())

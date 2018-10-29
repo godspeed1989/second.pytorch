@@ -61,4 +61,5 @@ message VoxelNet {
   bool lidar_input = 27;
   uint32 num_point_features = 28;
   VoxelGenerator voxel_generator = 29;
+  bool generate_bev = 30;
 }

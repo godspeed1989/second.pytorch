@@ -50,7 +50,7 @@ def build(input_reader_config,
     if not isinstance(input_reader_config, input_reader_pb2.InputReader):
         raise ValueError('input_reader_config not of type '
                          'input_reader_pb2.InputReader.')
-    generate_bev = model_config.use_bev
+    generate_bev = model_config.generate_bev
     without_reflectivity = model_config.without_reflectivity
     num_point_features = model_config.num_point_features
     out_size_factor = model_config.rpn.layer_strides[0] // model_config.rpn.upsample_strides[0]

@@ -928,3 +928,26 @@ def get_coco_eval_result(gt_annos, dt_annos, current_classes):
                                     f"{mAPaos[j, 1]:.2f}, "
                                     f"{mAPaos[j, 2]:.2f}"))
     return result
+
+def colorize(value, vmin=None, vmax=None):
+    """
+    By default it will normalize the input value to the range 0..1 before mapping
+    to a grayscale colormap.
+
+    Arguments:
+      - value: 3D Tensor of shape [1, height, width].
+      - vmin: the minimum value of the range used for normalization.
+        (Default: value minimum)
+      - vmax: the maximum value of the range used for normalization.
+        (Default: value maximum)
+    Returns a 3D tensor of shape [3, height, width].
+    """
+    # normalize
+    vmin = np.min(value) if vmin is None else vmin
+    vmax = np.max(value) if vmax is None else vmax
+    e = 1 if vmin == vmax else 0
+    value = (value - vmin) / (vmax - vmin + e)  # vmin..vmax
+    value = np.clip((value * 255) * 5, a_min=0, a_max=255)
+    value = np.tile(value, [3,1,1]).astype(np.uint8)
+
+    return value
