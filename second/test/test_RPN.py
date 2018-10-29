@@ -1,7 +1,7 @@
 import fire
 import torch
 from second.protos import pipeline_pb2
-from second.pytorch.models.voxelnet import RPN
+from second.pytorch.models.voxelnet_new import RPN
 from google.protobuf import text_format
 from second.builder import target_assigner_builder, voxel_builder
 from second.pytorch.builder import box_coder_builder
@@ -44,6 +44,8 @@ def test(config_path):
             box_code_size=target_assigner.box_coder.code_size)
     print(count_parameters(rpn)) # 5M
     spatial_features = torch.randn(1, num_rpn_input_filters * 2, 400, 768)
+    spatial_features = spatial_features.cuda()
+    rpn = rpn.cuda()
     # spatial_features [Batch, C, H, W]
     preds_dict = rpn(spatial_features)
     # box_preds [Batch, H/2, W/2, 14]
@@ -51,7 +53,7 @@ def test(config_path):
     print(box_preds.shape)
     # cls_preds [Batch, H/2, W/2, 2]
     cls_preds = preds_dict["cls_preds"]
-
+    print(cls_preds.shape)
 
 if __name__ == '__main__':
     fire.Fire()
