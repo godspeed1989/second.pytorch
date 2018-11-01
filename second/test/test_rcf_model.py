@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
+from second.pytorch.models.rcf_RPN import RCF_RPN
 
 # Model from paper
 # Richer Convolutional Features for Edge Detection
@@ -141,7 +142,9 @@ class RCF(nn.Module):
         upsample5 = torch.nn.functional.conv_transpose2d(so5_out, weight_deconv5, stride=8)
         ### center crop
         so1 = crop(so1_out, img_H, img_W)
+        print(so1_out.size(), '-->', so1.size())
         so2 = crop(upsample2, img_H, img_W)
+        print(upsample2.size(), '-->', so2.size())
         so3 = crop(upsample3, img_H, img_W)
         so4 = crop(upsample4, img_H, img_W)
         so5 = crop(upsample5, img_H, img_W)
@@ -231,4 +234,11 @@ if __name__ == '__main__':
     rcf = rcf.cuda()
     out = rcf(img)
     print(out[-1].size())
-    print(count_parameters(rcf)) # 0.4M
+    print(count_parameters(rcf) / 1.0e6, 'M')
+
+    rcf_new = RCF_RPN(num_input_filters=3)
+    rcf_new = rcf_new.cuda()
+    out = rcf_new(img)
+    for k in out.keys():
+        print(k, out[k].size())
+    print(count_parameters(rcf_new) / 1.0e6, 'M')

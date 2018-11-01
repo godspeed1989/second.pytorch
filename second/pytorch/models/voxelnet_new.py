@@ -19,6 +19,7 @@ from second.pytorch.core.losses import (WeightedSigmoidClassificationLoss,
                                           WeightedSoftmaxClassificationLoss)
 
 from second.pytorch.models.pointnet import PointnetFeatureExtractor
+from second.pytorch.models.rcf_RPN import RCF_RPN
 
 def _get_pos_neg_loss(cls_loss, labels):
     # cls_loss: [N, num_anchors, num_class]
@@ -618,6 +619,7 @@ class VoxelNet(nn.Module):
             num_rpn_input_filters = middle_num_filters_d2[-1]
         rpn_class_dict = {
             "RPN": RPN,
+            "RCF_RPN": RCF_RPN,
         }
         rpn_class = rpn_class_dict[rpn_class_name]
         self.rpn = rpn_class(
