@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torchplus.nn import Empty, GroupNorm
+from torchplus.tools import change_default_args
 
 class RCF_RPN(nn.Module):
     def __init__(self,
@@ -23,16 +25,39 @@ class RCF_RPN(nn.Module):
         self._num_anchor_per_loc = num_anchor_per_loc
         self._use_direction_classifier = use_direction_classifier
         self._use_bev = use_bev
+        if use_norm:
+            if use_groupnorm:
+                BatchNorm2d = change_default_args(
+                    num_groups=num_groups, eps=1e-3)(GroupNorm)
+            else:
+                BatchNorm2d = change_default_args(
+                    eps=1e-3, momentum=0.01)(nn.BatchNorm2d)
+            Conv2d = change_default_args(bias=False)(nn.Conv2d)
+            ConvTranspose2d = change_default_args(bias=False)(
+                nn.ConvTranspose2d)
+        else:
+            BatchNorm2d = Empty
+            Conv2d = change_default_args(bias=True)(nn.Conv2d)
+            ConvTranspose2d = change_default_args(bias=True)(
+                nn.ConvTranspose2d)
+
         # down
-        self.conv1_1 = nn.Conv2d(num_input_filters, 64, 3, padding=1)
-        self.conv1_2 = nn.Conv2d(64, 64, 3, padding=1)
+        self.conv1_1 = Conv2d(num_input_filters, 64, 3, padding=1)
+        self.conv1_1_bn = BatchNorm2d(64)
+        self.conv1_2 = Conv2d(64, 64, 3, padding=1)
+        self.conv1_2_bn = BatchNorm2d(64)
 
-        self.conv2_1 = nn.Conv2d(64, 128, 3, padding=1)
-        self.conv2_2 = nn.Conv2d(128, 128, 3, padding=1)
+        self.conv2_1 = Conv2d(64, 128, 3, padding=1)
+        self.conv2_1_bn = BatchNorm2d(128)
+        self.conv2_2 = Conv2d(128, 128, 3, padding=1)
+        self.conv2_2_bn = BatchNorm2d(128)
 
-        self.conv3_1 = nn.Conv2d(128, 256, 3, padding=1)
-        self.conv3_2 = nn.Conv2d(256, 256, 3, padding=1)
-        self.conv3_3 = nn.Conv2d(256, 256, 3, padding=1)
+        self.conv3_1 = Conv2d(128, 256, 3, padding=1)
+        self.conv3_1_bn = BatchNorm2d(256)
+        self.conv3_2 = Conv2d(256, 256, 3, padding=1)
+        self.conv3_2_bn = BatchNorm2d(256)
+        self.conv3_3 = Conv2d(256, 256, 3, padding=1)
+        self.conv3_3_bn = BatchNorm2d(256)
 
         hchn = 128   # hybrid_channels
         self.conv3_1_dsn = nn.Conv2d(256, hchn, 1, padding=0)
@@ -46,15 +71,22 @@ class RCF_RPN(nn.Module):
         self.score_dsn3 = nn.Conv2d(hchn, hchn, 3, padding=1)
 
         # up
-        self.conv3_1_up = nn.ConvTranspose2d(256, 256, 3, stride=2, padding=1, output_padding=1)
-        self.conv3_2_up = nn.Conv2d(256, 256, 3, padding=1)
-        self.conv3_3_up = nn.Conv2d(256, 128, 3, padding=1)
+        self.conv3_1_up = ConvTranspose2d(256, 256, 3, stride=2, padding=1, output_padding=1)
+        self.conv3_1_up_bn = BatchNorm2d(256)
+        self.conv3_2_up = Conv2d(256, 256, 3, padding=1)
+        self.conv3_2_up_bn = BatchNorm2d(256)
+        self.conv3_3_up = Conv2d(256, 128, 3, padding=1)
+        self.conv3_3_up_bn = BatchNorm2d(128)
 
-        self.conv2_1_up = nn.ConvTranspose2d(128+hchn, 128, 3, stride=2, padding=1, output_padding=1)
-        self.conv2_2_up = nn.Conv2d(128, 128, 3, padding=1)
+        self.conv2_1_up = ConvTranspose2d(128+hchn, 128, 3, stride=2, padding=1, output_padding=1)
+        self.conv2_1_up_bn = BatchNorm2d(128)
+        self.conv2_2_up = Conv2d(128, 128, 3, padding=1)
+        self.conv2_2_up_bn = BatchNorm2d(128)
 
-        self.conv1_1_up = nn.Conv2d(128+hchn, 128, 3, padding=1)
-        self.conv1_2_up = nn.Conv2d(128, 128, 3, padding=1)
+        self.conv1_1_up = Conv2d(128+hchn, 128, 3, padding=1)
+        self.conv1_1_up_bn = BatchNorm2d(128)
+        self.conv1_2_up = Conv2d(128, 128, 3, padding=1)
+        self.conv1_2_up_bn = BatchNorm2d(128)
 
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool2d(2, stride=2, ceil_mode=True)
@@ -72,17 +104,17 @@ class RCF_RPN(nn.Module):
 
     def forward(self, x):
         # down
-        conv1_1 = self.relu(self.conv1_1(x))
-        conv1_2 = self.relu(self.conv1_2(conv1_1))
+        conv1_1 = self.relu(self.conv1_1_bn(self.conv1_1(x)))
+        conv1_2 = self.relu(self.conv1_2_bn(self.conv1_2(conv1_1)))
         pool1   = self.maxpool(conv1_2)
 
-        conv2_1 = self.relu(self.conv2_1(pool1))
-        conv2_2 = self.relu(self.conv2_2(conv2_1))
+        conv2_1 = self.relu(self.conv2_1_bn(self.conv2_1(pool1)))
+        conv2_2 = self.relu(self.conv2_2_bn(self.conv2_2(conv2_1)))
         pool2   = self.maxpool(conv2_2)
 
-        conv3_1 = self.relu(self.conv3_1(pool2))
-        conv3_2 = self.relu(self.conv3_2(conv3_1))
-        conv3_3 = self.relu(self.conv3_3(conv3_2))
+        conv3_1 = self.relu(self.conv3_1_bn(self.conv3_1(pool2)))
+        conv3_2 = self.relu(self.conv3_2_bn(self.conv3_2(conv3_1)))
+        conv3_3 = self.relu(self.conv3_3_bn(self.conv3_3(conv3_2)))
         pool3   = self.maxpool(conv3_3)
 
         conv2_1_dsn = self.conv2_1_dsn(conv2_1)
@@ -94,17 +126,17 @@ class RCF_RPN(nn.Module):
         so2_out = self.score_dsn2(conv2_1_dsn + conv2_2_dsn)
         so3_out = self.score_dsn3(conv3_1_dsn + conv3_2_dsn + conv3_3_dsn)
 
-        conv3_1_up = self.relu(self.conv3_1_up(pool3))
-        conv3_2_up = self.relu(self.conv3_2_up(conv3_1_up))
-        conv3_3_up = self.relu(self.conv3_3_up(conv3_2_up))
+        conv3_1_up = self.relu(self.conv3_1_up_bn(self.conv3_1_up(pool3)))
+        conv3_2_up = self.relu(self.conv3_2_up_bn(self.conv3_2_up(conv3_1_up)))
+        conv3_3_up = self.relu(self.conv3_3_up_bn(self.conv3_3_up(conv3_2_up)))
         conv3_up_cat = torch.cat((conv3_3_up, so3_out), dim=1)
 
-        conv2_1_up = self.relu(self.conv2_1_up(conv3_up_cat))
-        conv2_2_up = self.relu(self.conv2_2_up(conv2_1_up))
+        conv2_1_up = self.relu(self.conv2_1_up_bn(self.conv2_1_up(conv3_up_cat)))
+        conv2_2_up = self.relu(self.conv2_2_up_bn(self.conv2_2_up(conv2_1_up)))
         conv2_up_cat = torch.cat((conv2_2_up, so2_out), dim=1)
 
-        conv1_1_up = self.relu(self.conv1_1_up(conv2_up_cat))
-        conv1_2_up = self.relu(self.conv1_2_up(conv1_1_up))
+        conv1_1_up = self.relu(self.conv1_1_up_bn(self.conv1_1_up(conv2_up_cat)))
+        conv1_2_up = self.relu(self.conv1_2_up_bn(self.conv1_2_up(conv1_1_up)))
 
         x = conv1_2_up
 
