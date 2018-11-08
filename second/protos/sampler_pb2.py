@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='second.protos',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x1bsecond/protos/sampler.proto\x12\rsecond.protos\x1a\x1esecond/protos/preprocess.proto\"}\n\x05Group\x12?\n\x0fname_to_max_num\x18\x01 \x03(\x0b\x32&.second.protos.Group.NameToMaxNumEntry\x1a\x33\n\x11NameToMaxNumEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\r:\x02\x38\x01\"\xd8\x01\n\x07Sampler\x12\x1a\n\x12\x64\x61tabase_info_path\x18\x01 \x01(\t\x12+\n\rsample_groups\x18\x02 \x03(\x0b\x32\x14.second.protos.Group\x12\x45\n\x13\x64\x61tabase_prep_steps\x18\x03 \x03(\x0b\x32(.second.protos.DatabasePreprocessingStep\x12/\n\'global_random_rotation_range_per_object\x18\x04 \x03(\x02\x12\x0c\n\x04rate\x18\x05 \x01(\x02\x62\x06proto3')
+  serialized_pb=_b('\n\x1bsecond/protos/sampler.proto\x12\rsecond.protos\x1a\x1esecond/protos/preprocess.proto\"}\n\x05Group\x12?\n\x0fname_to_max_num\x18\x01 \x03(\x0b\x32&.second.protos.Group.NameToMaxNumEntry\x1a\x33\n\x11NameToMaxNumEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\r:\x02\x38\x01\"\xf7\x01\n\x07Sampler\x12\x1a\n\x12\x64\x61tabase_info_path\x18\x01 \x01(\t\x12+\n\rsample_groups\x18\x02 \x03(\x0b\x32\x14.second.protos.Group\x12\x45\n\x13\x64\x61tabase_prep_steps\x18\x03 \x03(\x0b\x32(.second.protos.DatabasePreprocessingStep\x12/\n\'global_random_rotation_range_per_object\x18\x04 \x03(\x02\x12\x0c\n\x04rate\x18\x05 \x01(\x02\x12\x1d\n\x15\x64\x61tabase_sampler_name\x18\x06 \x01(\tb\x06proto3')
   ,
   dependencies=[second_dot_protos_dot_preprocess__pb2.DESCRIPTOR,])
 
@@ -137,6 +137,13 @@ _SAMPLER = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='database_sampler_name', full_name='second.protos.Sampler.database_sampler_name', index=5,
+      number=6, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -150,7 +157,7 @@ _SAMPLER = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=206,
-  serialized_end=422,
+  serialized_end=453,
 )
 
 _GROUP_NAMETOMAXNUMENTRY.containing_type = _GROUP

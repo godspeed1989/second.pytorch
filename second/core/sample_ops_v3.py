@@ -1,19 +1,139 @@
 import pathlib
-import pickle
-import time
-from functools import partial, reduce
-
 import numpy as np
-from skimage import io as imgio
+from functools import partial, reduce
 
 from second.core import preprocess as prep
 from second.core import box_np_ops
-from second.data import kitti_common as kitti
 import copy
 
 from second.utils.check import shape_mergeable
 
-class DataBaseSamplerV2:
+"""
+    Estimate ground points
+"""
+class ground_filter(object):
+    def __init__(self):
+        self.sensor_height = 2.5
+        self.max_iter = 15
+        self.th_dist = 0.1
+        self.stable_delta = 50
+        self.reset()
+
+    def reset(self):
+        self.normal = None
+        self.ground_pc = None
+        self.pc = None
+
+    def _extract_initial_seeds(self):
+        # LPR is the mean of low point representative
+        # lowest 1% points
+        sum_cnt = (int)(self.pc.shape[0] * 0.01)
+        lpr_height = np.mean(self.pc[:sum_cnt, 2])
+        g_seeds_pc = self.pc[self.pc[:, 2] < lpr_height]
+        return g_seeds_pc
+
+    def _estimate_plane(self):
+        # Create covarian matrix.
+        # 1. calculate (x,y,z) mean (3,1)
+        mean_xyz = np.expand_dims(np.mean(self.ground_pc, axis=0), axis=-1)
+        # 2. calculate covariance
+        # cov(x,x), cov(y,y), cov(z,z)
+        # cov(x,y), cov(x,z), cov(y,z)
+        cov = np.cov(self.ground_pc.T)
+        # Singular Value Decomposition: SVD
+        u, s, vh = np.linalg.svd(cov)
+        # use the least singular vector as normal (3,1)
+        self.normal = np.expand_dims(u[:,2], axis=-1)
+        # according to normal.T*[x,y,z] = -d
+        d_ = -np.dot(self.normal.T, mean_xyz)[0,0]
+        # set distance threhold to `th_dist - d`
+        th_dist_d_ = - d_ + self.th_dist
+        return th_dist_d_
+
+    def filter(self, pc_velo):
+        self.pc = pc_velo[:, :3].copy()
+        # Error point removal
+        # As there are some error mirror reflection under the ground
+        # here regardless point under 2* sensor_height
+        self.pc = self.pc[self.pc[:, 2] > -1.5* self.sensor_height, :]
+        # Sort along Z-axis
+        self.pc = self.pc[self.pc[:, 2].argsort()]
+        # Extract init ground seeds.
+        g_seeds_pc = self._extract_initial_seeds()
+        self.ground_pc = g_seeds_pc
+        # Ground plane fitter mainloop
+        for _ in range(self.max_iter):
+            cnt_prev = self.ground_pc.shape[0]
+            th_dist_d_ = self._estimate_plane()
+            # ground plane model (n,3)*(3,1)=(n,1)
+            result = np.dot(self.pc, self.normal)
+            result = np.squeeze(result)
+            # threshold filter
+            sel = result <= th_dist_d_
+            self.ground_pc = self.pc[sel, :]
+            #print(self.pc.shape[0], ':', cnt_prev, '->', np.sum(sel))
+            cnt_delta = abs(np.sum(sel) - cnt_prev)
+            if cnt_delta < self.stable_delta:
+                break
+
+'''
+Input:
+    points (N,2)
+    voxel_size (2,)  [0.2, 0.2]
+    coord_range (2,) [0, -40]  lower bound of coordinate
+    grid_size (2,)   [352, 400]
+Return;
+    voxel_index (M,2)
+'''
+def _points_to_voxelidx_2d(points, voxel_size, coord_range, grid_size):
+    voxel_index = np.floor((points-coord_range) / voxel_size).astype(np.int)
+    bound_x = np.logical_and(
+        voxel_index[:, 0] >= 0, voxel_index[:, 0] < grid_size[0])
+    bound_y = np.logical_and(
+        voxel_index[:, 1] >= 0, voxel_index[:, 1] < grid_size[1])
+    bound_box = np.logical_and(bound_x, bound_y)
+    voxel_index = voxel_index[bound_box]
+    if voxel_index.shape[0] < 2:
+        return voxel_index
+    else:
+        return np.unique(voxel_index, axis=0)
+
+'''
+Input: xyz -> xy
+    points (N,3)
+    voxel_size (3,)  [0.2, 0.2, 0.4]
+    coord_range (3,) [0, -40, -3]  lower bound of coordinate
+    grid_size (3,)   [352, 400,  10]
+Return;
+    grid_mask (grid_size[0], grid_size[1])
+'''
+def _points_to_gridmask_2d(points, voxel_size, coord_range, grid_size):
+    grid_mask = np.zeros(grid_size[:2], dtype=np.bool_)
+    #
+    voxel_index = _points_to_voxelidx_2d(points[:,:2], voxel_size[:2], coord_range[:2], grid_size[:2])
+    # idx from (N,2) -> (2,N)
+    grid_mask[tuple(voxel_index.T)] = True
+    #
+    return grid_mask
+
+def _fine_sample_by_grd(sampled_cls, grd_gridmask, voxel_size, coord_range, grid_size):
+    new_sampled_cls = []
+    for s in sampled_cls:
+        boxes = s['box3d_lidar'][np.newaxis, ...]
+        boxes_bv = box_np_ops.center_to_corner_box2d(
+            boxes[:, 0:2], boxes[:, 3:5], boxes[:, 6])
+        boxes_bv = np.reshape(boxes_bv, [-1, 2])
+        voxel_idx = _points_to_voxelidx_2d(boxes_bv, voxel_size[:2], coord_range[:2], grid_size[:2])
+        if np.all(grd_gridmask[tuple(voxel_idx.T)]):
+            new_sampled_cls.append(s)
+    #print(len(sampled_cls), '->', len(new_sampled_cls))
+    return new_sampled_cls
+
+
+'''
+    from second.core.sample_ops import DataBaseSamplerV2
+'''
+class DataBaseSamplerV3:
     def __init__(self, db_infos, groups, db_prepor=None,
                  rate=1.0, global_rot_range=None):
         for k, v in db_infos.items():
@@ -93,10 +213,10 @@ class DataBaseSamplerV2:
         return self._use_group_sampling
 
     def sample_all(self,
-                   points, # useless here, for v3
-                   voxel_size, # useless here, for v3
-                   point_cloud_range, # useless here, for v3
-                   voxel_grids, # useless here, for v3
+                   points,
+                   voxel_size,
+                   point_cloud_range,
+                   voxel_grids,
                    root_path,
                    gt_boxes,
                    gt_names,
@@ -131,15 +251,43 @@ class DataBaseSamplerV2:
         sampled_gt_boxes = []
         avoid_coll_boxes = gt_boxes
 
+        finetune_by_grd = True
+        voxel_scale = 2
+        voxel_size_scaled = voxel_size * voxel_scale
+        voxel_grids_scale = voxel_grids // voxel_scale
+        if finetune_by_grd:
+            grd_filter = ground_filter()
+            grd_filter.filter(points)
+            grd_gridmask = _points_to_gridmask_2d(grd_filter.ground_pc,
+                                                  voxel_size_scaled, point_cloud_range[:3], voxel_grids_scale)
+        else:
+            grd_gridmask = None
+
         for class_name, sampled_num in zip(sampled_groups,
                                            sample_num_per_class):
             if sampled_num > 0:
+                if finetune_by_grd:
+                    assert self._use_group_sampling is not True
+                    all_samples = self._sampler_dict[class_name].sample(sampled_num * 25)
+                    all_samples = copy.deepcopy(all_samples)
+                    all_samples = _fine_sample_by_grd(all_samples, grd_gridmask,
+                                                      voxel_size_scaled, point_cloud_range[:3], voxel_grids_scale)
+                    if len(all_samples) > sampled_num:
+                        #print(len(all_samples), '>', sampled_num)
+                        all_samples = all_samples[:sampled_num]
+                else:
+                    all_samples = self._sampler_dict[class_name].sample(sampled_num)
+                    all_samples = copy.deepcopy(all_samples)
+
                 if self._use_group_sampling:
                     sampled_cls = self.sample_group(class_name, sampled_num,
-                                                       avoid_coll_boxes, total_group_ids)
+                                                    avoid_coll_boxes, total_group_ids)
                 else:
-                    sampled_cls = self.sample_class_v2(class_name, sampled_num,
-                                                       avoid_coll_boxes)
+                    if len(all_samples) > 0:
+                        sampled_cls = self.sample_class_v2(all_samples,
+                                                           avoid_coll_boxes)
+                    else:
+                        sampled_cls = []
 
                 sampled += sampled_cls
                 if len(sampled_cls) > 0:
@@ -199,6 +347,18 @@ class DataBaseSamplerV2:
                         s_points = s_points[np.logical_not(mask)]
                     s_points_list_new.append(s_points)
                 s_points_list = s_points_list_new
+
+            finetune_samples_axis_z = True
+            if finetune_samples_axis_z:
+                gt_box_bottom_avg = np.mean(gt_boxes[:,2])
+                # finetune boxes
+                sampled_gt_boxes_bottom = sampled_gt_boxes[:,2]
+                delta = sampled_gt_boxes_bottom - gt_box_bottom_avg
+                sampled_gt_boxes[:,2] -= delta
+                # finetune points
+                for i in range(len(s_points_list)):
+                    s_points_list[i][:,2] -= delta[i]
+
             ret = {
                 "gt_names": np.array([s["name"] for s in sampled]),
                 "difficulty": np.array([s["difficulty"] for s in sampled]),
@@ -234,17 +394,19 @@ class DataBaseSamplerV2:
             ret = self._sampler_dict[name].sample(num)
             return ret, np.ones((len(ret), ), dtype=np.int64)
 
-
-    def sample_class_v2(self, name, num, gt_boxes):
-        sampled = self._sampler_dict[name].sample(num)
-        sampled = copy.deepcopy(sampled)
+    def sample_class_v2(self, sampled, gt_boxes):
+        # sample some from dict
+        # sampled = self._sampler_dict[name].sample(num)
+        # sampled = copy.deepcopy(sampled)
         num_gt = gt_boxes.shape[0]
         num_sampled = len(sampled)
+        # BEV: ground truth
         gt_boxes_bv = box_np_ops.center_to_corner_box2d(
             gt_boxes[:, 0:2], gt_boxes[:, 3:5], gt_boxes[:, 6])
 
+        # BEV: sampled
         sp_boxes = np.stack([i["box3d_lidar"] for i in sampled], axis=0)
-
+        # just rotate sampled objects
         valid_mask = np.zeros([gt_boxes.shape[0]], dtype=np.bool_)
         valid_mask = np.concatenate(
             [valid_mask,

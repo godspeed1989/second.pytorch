@@ -13,4 +13,5 @@ message Sampler{
     repeated DatabasePreprocessingStep database_prep_steps = 3;
     repeated float global_random_rotation_range_per_object = 4;
     float rate = 5;
+    string database_sampler_name = 6;
 }

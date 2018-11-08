@@ -11,6 +11,7 @@ from second.core import preprocess as prep
 from second.core.geometry import points_in_convex_polygon_3d_jit
 from second.core.point_cloud.bev_ops import points_to_bev
 from second.data import kitti_common as kitti
+from second.data.ply_file_io import write_ply
 
 
 def merge_second_batch(batch_list, _unused=False):
@@ -79,7 +80,7 @@ def prep_pointcloud(input_dict,
                     bev_only=False,
                     use_group_id=False,
                     out_dtype=np.float32):
-    """convert point cloud to voxels, create targets if ground truths 
+    """convert point cloud to voxels, create targets if ground truths
     exists.
     """
     points = input_dict["points"]
@@ -146,6 +147,10 @@ def prep_pointcloud(input_dict,
             [n in class_names for n in gt_names], dtype=np.bool_)
         if db_sampler is not None:
             sampled_dict = db_sampler.sample_all(
+                points,
+                voxel_generator.voxel_size,
+                voxel_generator.point_cloud_range,
+                voxel_generator.grid_size,
                 root_path,
                 gt_boxes,
                 gt_names,
@@ -172,8 +177,12 @@ def prep_pointcloud(input_dict,
                     group_ids = np.concatenate([group_ids, sampled_group_ids])
 
                 if remove_points_after_sample:
+                    # extend height of sampled targets
+                    sampled_gt_boxes_ext = sampled_gt_boxes.copy()
+                    sampled_gt_boxes_ext[:, 2] = -10
+                    sampled_gt_boxes_ext[:, 5] = 20
                     points = prep.remove_points_in_boxes(
-                        points, sampled_gt_boxes)
+                        points, sampled_gt_boxes_ext)
 
                 points = np.concatenate([sampled_points, points], axis=0)
         # unlabeled_mask = np.zeros((gt_boxes.shape[0], ), dtype=np.bool_)
