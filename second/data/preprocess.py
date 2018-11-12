@@ -145,6 +145,7 @@ def prep_pointcloud(input_dict,
                 group_ids = group_ids[keep_mask]
         gt_boxes_mask = np.array(
             [n in class_names for n in gt_names], dtype=np.bool_)
+        #write_ply(points, '{}_1.ply'.format(image_idx))
         if db_sampler is not None:
             sampled_dict = db_sampler.sample_all(
                 points,
@@ -194,6 +195,7 @@ def prep_pointcloud(input_dict,
         if bev_only:  # set z and h to limits
             gt_boxes[:, 2] = pc_range[2]
             gt_boxes[:, 5] = pc_range[5] - pc_range[2]
+        #write_ply(points, '{}_2.ply'.format(image_idx))
         prep.noise_per_object_v3_(
             gt_boxes,
             points,
@@ -203,6 +205,7 @@ def prep_pointcloud(input_dict,
             global_random_rot_range=global_random_rot_range,
             group_ids=group_ids,
             num_try=100)
+        #write_ply(points, '{}_3.ply'.format(image_idx))
         # should remove unrelated objects after noise per object
         gt_boxes = gt_boxes[gt_boxes_mask]
         gt_names = gt_names[gt_boxes_mask]

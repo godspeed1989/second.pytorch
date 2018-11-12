@@ -252,7 +252,7 @@ class DataBaseSamplerV3:
         avoid_coll_boxes = gt_boxes
 
         finetune_by_grd = True
-        voxel_scale = 2
+        voxel_scale = 3
         voxel_size_scaled = voxel_size * voxel_scale
         voxel_grids_scale = voxel_grids // voxel_scale
         if finetune_by_grd:
@@ -268,7 +268,7 @@ class DataBaseSamplerV3:
             if sampled_num > 0:
                 if finetune_by_grd:
                     assert self._use_group_sampling is not True
-                    all_samples = self._sampler_dict[class_name].sample(sampled_num * 25)
+                    all_samples = self._sampler_dict[class_name].sample(sampled_num * 15)
                     all_samples = copy.deepcopy(all_samples)
                     all_samples = _fine_sample_by_grd(all_samples, grd_gridmask,
                                                       voxel_size_scaled, point_cloud_range[:3], voxel_grids_scale)
