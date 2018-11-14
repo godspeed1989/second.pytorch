@@ -251,7 +251,7 @@ class DataBaseSamplerV3:
         sampled_gt_boxes = []
         avoid_coll_boxes = gt_boxes
 
-        finetune_by_grd = True
+        finetune_by_grd = False
         voxel_scale = 3
         voxel_size_scaled = voxel_size * voxel_scale
         voxel_grids_scale = voxel_grids // voxel_scale

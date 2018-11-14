@@ -20,6 +20,7 @@ from second.pytorch.core.losses import (WeightedSigmoidClassificationLoss,
 
 from second.pytorch.models.pointnet import PointnetFeatureExtractor
 from second.pytorch.models.rcf_RPN import RCF_RPN
+from second.pytorch.core.dropblock import DropBlock2D
 
 def _get_pos_neg_loss(cls_loss, labels):
     # cls_loss: [N, num_anchors, num_class]
@@ -355,6 +356,7 @@ class RPN(nn.Module):
                  num_groups=32,
                  use_bev=False,
                  box_code_size=7,
+                 use_dropblock=True,
                  name='rpn'):
         super(RPN, self).__init__()
         self._num_anchor_per_loc = num_anchor_per_loc
@@ -385,16 +387,22 @@ class RPN(nn.Module):
             Conv2d = change_default_args(bias=True)(nn.Conv2d)
             ConvTranspose2d = change_default_args(bias=True)(
                 nn.ConvTranspose2d)
+        if use_dropblock:
+            DropBlock2d = DropBlock2D
+        else:
+            DropBlock2d = Empty
 
         # note that when stride > 1, conv2d with same padding isn't
         # equal to pad-conv2d. we should use pad-conv2d.
         block2_input_filters = num_filters[0]
         if use_bev:
             self.bev_extractor = Sequential(
+                DropBlock2d(block_size=3, drop_prob=0.3),
                 Conv2d(6, 32, 3, padding=1),
                 BatchNorm2d(32),
                 nn.ReLU(),
                 # nn.MaxPool2d(2, 2),
+                DropBlock2d(block_size=3, drop_prob=0.3),
                 Conv2d(32, 64, 3, padding=1),
                 BatchNorm2d(64),
                 nn.ReLU(),
@@ -403,6 +411,7 @@ class RPN(nn.Module):
             block2_input_filters += 64
 
         self.block1 = Sequential(
+            DropBlock2d(block_size=3, drop_prob=0.3),
             nn.ZeroPad2d(1),
             Conv2d(
                 num_input_filters, num_filters[0], 3, stride=layer_strides[0]),
@@ -410,6 +419,7 @@ class RPN(nn.Module):
             nn.ReLU(),
         )
         for i in range(layer_nums[0]):
+            self.block1.add(DropBlock2d(block_size=3, drop_prob=0.3))
             self.block1.add(
                 Conv2d(num_filters[0], num_filters[0], 3, padding=1))
             self.block1.add(BatchNorm2d(num_filters[0]))
@@ -424,6 +434,7 @@ class RPN(nn.Module):
             nn.ReLU(),
         )
         self.block2 = Sequential(
+            DropBlock2d(block_size=3, drop_prob=0.3),
             nn.ZeroPad2d(1),
             Conv2d(
                 block2_input_filters,
@@ -434,6 +445,7 @@ class RPN(nn.Module):
             nn.ReLU(),
         )
         for i in range(layer_nums[1]):
+            self.block2.add(DropBlock2d(block_size=3, drop_prob=0.3))
             self.block2.add(
                 Conv2d(num_filters[1], num_filters[1], 3, padding=1))
             self.block2.add(BatchNorm2d(num_filters[1]))
@@ -448,12 +460,14 @@ class RPN(nn.Module):
             nn.ReLU(),
         )
         self.block3 = Sequential(
+            DropBlock2d(block_size=3, drop_prob=0.3),
             nn.ZeroPad2d(1),
             Conv2d(num_filters[1], num_filters[2], 3, stride=layer_strides[2]),
             BatchNorm2d(num_filters[2]),
             nn.ReLU(),
         )
         for i in range(layer_nums[2]):
+            self.block3.add(DropBlock2d(block_size=3, drop_prob=0.3))
             self.block3.add(
                 Conv2d(num_filters[2], num_filters[2], 3, padding=1))
             self.block3.add(BatchNorm2d(num_filters[2]))

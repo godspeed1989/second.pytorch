@@ -3,6 +3,10 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
+from torchplus.tools import change_default_args
+
+from second.pytorch.knn_pytorch import knn_pytorch as knn
+
 # copy from voxelnet.py
 def get_paddings_indicator(actual_num, max_num, axis=0):
     """Create boolean mask by actually number of a padded tensor.
@@ -38,13 +42,22 @@ class PointnetFeatureExtractor(nn.Module):
         self.name = name
         self.num_input_features = num_input_features
 
-        self.conv1 = torch.nn.Conv1d(3, 32, 1)
-        self.conv2 = torch.nn.Conv1d(32, 64, 1)
-        self.conv3 = torch.nn.Conv1d(64+3, 96, 1)
-        self.conv4 = torch.nn.Conv1d(96, 127, 1)
-        self.bn1 = torch.nn.BatchNorm1d(32)
+        Conv1d = change_default_args(bias=False)(torch.nn.Conv1d)
+        Conv2d = change_default_args(bias=False)(torch.nn.Conv2d)
+
+        k = 8
+        self.knn1 = knn.KNearestNeighbor(k)
+        self.conv1 = Conv2d(3, 32, [k, 1])
+        self.bn1 = torch.nn.BatchNorm2d(32)
+        #
+        self.conv2 = Conv1d(32, 64, 1)
         self.bn2 = torch.nn.BatchNorm1d(64)
-        self.bn3 = torch.nn.BatchNorm1d(96)
+        #
+        self.knn3 = knn.KNearestNeighbor(k)
+        self.conv3 = Conv2d(64, 96, [k, 1])
+        self.bn3 = torch.nn.BatchNorm2d(96)
+        #
+        self.conv4 = Conv1d(96, 127, 1)
         self.bn4 = torch.nn.BatchNorm1d(127)
 
     def forward(self, features, num_voxels):
@@ -58,19 +71,25 @@ class PointnetFeatureExtractor(nn.Module):
         voxel_count = features.shape[1]
         mask = get_paddings_indicator(num_voxels, voxel_count, axis=0)
         mask = mask.unsqueeze(-1).type_as(features)
+        x = features_relative * mask
 
-        x = features_relative.permute(0, 2, 1)
+        # K,N,3 -> K,3,N
+        x = torch.transpose(features_relative, 2, 1)
+        # K,3,N -> K,3,K,N
+        x, _ = self.knn1(x)
         x = self.bn1(F.relu(self.conv1(x)))
+        x = torch.squeeze(x, dim=2)
+        #
         x = self.bn2(F.relu(self.conv2(x)))
-        x = x.permute(0, 2, 1)
-
-        x = torch.cat([x, features_relative], dim=-1)
-        x *= mask
-
-        x = x.permute(0, 2, 1)
+        #
+        x, _ = self.knn3(x)
         x = self.bn3(F.relu(self.conv3(x)))
+        x = torch.squeeze(x, dim=2)
+        #
         x = self.bn4(F.relu(self.conv4(x)))
-        x = x.permute(0, 2, 1)
+        #
+        x = torch.transpose(x, 2, 1)
+        x = x * mask
 
         voxelwise = x.max(dim=1, keepdim=False)[0]
         if self.num_input_features == 4:
@@ -83,8 +102,8 @@ class PointnetFeatureExtractor(nn.Module):
 if __name__ == '__main__':
     num_voxel_size = 100
     concated_num_points = 8
-    sim_features = Variable(torch.rand(concated_num_points, num_voxel_size, 4))
-    sim_num_voxels = Variable(torch.rand(concated_num_points))
-    pointfeat = PointnetFeatureExtractor()
+    sim_features = Variable(torch.rand(concated_num_points, num_voxel_size, 4)).cuda()
+    sim_num_voxels = Variable(torch.rand(concated_num_points)).cuda()
+    pointfeat = PointnetFeatureExtractor().cuda()
     out = pointfeat(sim_features, sim_num_voxels)
     print('global feat', out.size())
