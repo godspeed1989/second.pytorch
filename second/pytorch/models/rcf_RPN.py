@@ -3,9 +3,11 @@ import torch.nn as nn
 from torchplus.nn import Empty, GroupNorm
 from torchplus.tools import change_default_args
 
+from second.pytorch.core.dropblock import DropBlock2D
+
 class RCF_RPN(nn.Module):
     def __init__(self,
-                 use_norm=True,
+                 use_norm=False,
                  num_class=2,
                  layer_nums=[3, 5, 5],
                  layer_strides=[2, 2, 2],
@@ -20,7 +22,8 @@ class RCF_RPN(nn.Module):
                  num_groups=32,
                  use_bev=False,
                  box_code_size=7,
-                 name='rpn'):
+                 use_dropblock=True,
+                 name='rcf_rpn'):
         super(RCF_RPN, self).__init__()
         self._num_anchor_per_loc = num_anchor_per_loc
         self._use_direction_classifier = use_direction_classifier
@@ -40,22 +43,33 @@ class RCF_RPN(nn.Module):
             Conv2d = change_default_args(bias=True)(nn.Conv2d)
             ConvTranspose2d = change_default_args(bias=True)(
                 nn.ConvTranspose2d)
+        if use_dropblock:
+            DropBlock2d = DropBlock2D
+        else:
+            DropBlock2d = Empty
 
         # down
+        self.drop1_1 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.conv1_1 = Conv2d(num_input_filters, 64, 3, padding=1)
         self.conv1_1_bn = BatchNorm2d(64)
+        self.drop1_2 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.conv1_2 = Conv2d(64, 64, 3, padding=1)
         self.conv1_2_bn = BatchNorm2d(64)
 
+        self.drop2_1 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.conv2_1 = Conv2d(64, 128, 3, padding=1)
         self.conv2_1_bn = BatchNorm2d(128)
+        self.drop2_2 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.conv2_2 = Conv2d(128, 128, 3, padding=1)
         self.conv2_2_bn = BatchNorm2d(128)
 
+        self.drop3_1 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.conv3_1 = Conv2d(128, 256, 3, padding=1)
         self.conv3_1_bn = BatchNorm2d(256)
+        self.drop3_2 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.conv3_2 = Conv2d(256, 256, 3, padding=1)
         self.conv3_2_bn = BatchNorm2d(256)
+        self.drop3_3 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.conv3_3 = Conv2d(256, 256, 3, padding=1)
         self.conv3_3_bn = BatchNorm2d(256)
 
@@ -67,7 +81,9 @@ class RCF_RPN(nn.Module):
         self.conv2_1_dsn = nn.Conv2d(128, hchn, 1, padding=0)
         self.conv2_2_dsn = nn.Conv2d(128, hchn, 1, padding=0)
 
+        self.score_drop2 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.score_dsn2 = nn.Conv2d(hchn, hchn, 3, padding=1)
+        self.score_drop3 = DropBlock2d(block_size=3, drop_prob=0.3)
         self.score_dsn3 = nn.Conv2d(hchn, hchn, 3, padding=1)
 
         # up
@@ -104,17 +120,17 @@ class RCF_RPN(nn.Module):
 
     def forward(self, x):
         # down
-        conv1_1 = self.relu(self.conv1_1_bn(self.conv1_1(x)))
-        conv1_2 = self.relu(self.conv1_2_bn(self.conv1_2(conv1_1)))
+        conv1_1 = self.relu(self.conv1_1_bn(self.conv1_1(self.drop1_1(x))))
+        conv1_2 = self.relu(self.conv1_2_bn(self.conv1_2(self.drop1_2(conv1_1))))
         pool1   = self.maxpool(conv1_2)
 
-        conv2_1 = self.relu(self.conv2_1_bn(self.conv2_1(pool1)))
-        conv2_2 = self.relu(self.conv2_2_bn(self.conv2_2(conv2_1)))
+        conv2_1 = self.relu(self.conv2_1_bn(self.conv2_1(self.drop2_1(pool1))))
+        conv2_2 = self.relu(self.conv2_2_bn(self.conv2_2(self.drop2_2(conv2_1))))
         pool2   = self.maxpool(conv2_2)
 
-        conv3_1 = self.relu(self.conv3_1_bn(self.conv3_1(pool2)))
-        conv3_2 = self.relu(self.conv3_2_bn(self.conv3_2(conv3_1)))
-        conv3_3 = self.relu(self.conv3_3_bn(self.conv3_3(conv3_2)))
+        conv3_1 = self.relu(self.conv3_1_bn(self.conv3_1(self.drop3_1(pool2))))
+        conv3_2 = self.relu(self.conv3_2_bn(self.conv3_2(self.drop3_2(conv3_1))))
+        conv3_3 = self.relu(self.conv3_3_bn(self.conv3_3(self.drop3_3(conv3_2))))
         pool3   = self.maxpool(conv3_3)
 
         conv2_1_dsn = self.conv2_1_dsn(conv2_1)
@@ -123,8 +139,8 @@ class RCF_RPN(nn.Module):
         conv3_2_dsn = self.conv3_2_dsn(conv3_2)
         conv3_3_dsn = self.conv3_3_dsn(conv3_3)
 
-        so2_out = self.score_dsn2(conv2_1_dsn + conv2_2_dsn)
-        so3_out = self.score_dsn3(conv3_1_dsn + conv3_2_dsn + conv3_3_dsn)
+        so2_out = self.score_dsn2(self.score_drop2(conv2_1_dsn + conv2_2_dsn))
+        so3_out = self.score_dsn3(self.score_drop3(conv3_1_dsn + conv3_2_dsn + conv3_3_dsn))
 
         conv3_1_up = self.relu(self.conv3_1_up_bn(self.conv3_1_up(pool3)))
         conv3_2_up = self.relu(self.conv3_2_up_bn(self.conv3_2_up(conv3_1_up)))
